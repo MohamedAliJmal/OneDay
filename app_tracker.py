@@ -34,6 +34,10 @@ from google.auth.transport.requests import Request
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 
+def convert_to_RFC_datetime(start_time):
+    dt = datetime.datetime(start_time.year,start_time.month,start_time.day,start_time.hour-1,start_time.minute, 0).isoformat() + 'Z'
+    return dt
+
 def connect():
     creds = None
     if os.path.exists('token.pickle'):
@@ -48,16 +52,18 @@ def connect():
             creds = flow.run_local_server(port=0)
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
-    return creds
+    service=build('calendar','v3',credentials=creds)
+    return service
 
 def create_event(service, start_time, end_time, summary):
     event = {
         'summary': summary,
-        'start': {'dateTime': start_time},
-        'end': {'dateTime': end_time},
+        'description':"",
+        'start': {'dateTime':  convert_to_RFC_datetime(start_time) ,"timezone":"GMT"},
+        'end': {'dateTime': convert_to_RFC_datetime(end_time),"timezone":"GMT"},
     }
-    event = service.events().insert(calendarId='primary', body=event).execute()
-    print(f'Event created: {event.get("htmlLink")}')
+    event_result = service.events().insert(calendarId='primary', body=event).execute()
+    print(f'Event created: {event_result.get("htmlLink")}')
 
 
 def get_active_app_title():
@@ -75,8 +81,8 @@ def get_active_app_title():
 def main():
 
 
-    creds=connect()
-    service=build('calendar','v3',credentials=creds)
+    service=connect()
+    
 
     print("Tracking active application... (Press Ctrl+C to stop)")
     try:
@@ -84,8 +90,7 @@ def main():
             active_app_title = get_active_app_title()
             if active_app_title:
                 start_time=datetime.datetime.now()
-                
-                while(active_app_title==get_active_app_title()): 
+                while(active_app_title==get_active_app_title() ):
                     continue
 
                 end_time=datetime.datetime.now()
