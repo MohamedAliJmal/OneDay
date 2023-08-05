@@ -1,7 +1,6 @@
 import datetime
 import pickle
 import os.path
-import time
 import pygetwindow as gw
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -35,7 +34,7 @@ from google.auth.transport.requests import Request
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 
 def convert_to_RFC_datetime(start_time):
-    dt = datetime.datetime(start_time.year,start_time.month,start_time.day,start_time.hour-1,start_time.minute, 0).isoformat() + 'Z'
+    dt = datetime.datetime(start_time.year,start_time.month,start_time.day,start_time.hour,start_time.minute, 0).isoformat() + 'Z'
     return dt
 
 def connect():
@@ -55,12 +54,19 @@ def connect():
     service=build('calendar','v3',credentials=creds)
     return service
 
+def get_timezone():
+    now=datetime.datetime.now()
+    local_now=now.astimezone()
+    local_tz=local_now.tzinfo
+    local_tzname=local_tz.tzname(local_now)
+    return local_tzname
+
 def create_event(service, start_time, end_time, summary):
     event = {
         'summary': summary,
         'description':"",
-        'start': {'dateTime':  convert_to_RFC_datetime(start_time) ,"timezone":"GMT"},
-        'end': {'dateTime': convert_to_RFC_datetime(end_time),"timezone":"GMT"},
+        'start': {'dateTime':  convert_to_RFC_datetime(start_time) ,"timezone":get_timezone()},
+        'end': {'dateTime': convert_to_RFC_datetime(end_time),"timezone":get_timezone()},
     }
     event_result = service.events().insert(calendarId='primary', body=event).execute()
     print(f'Event created: {event_result.get("htmlLink")}')
@@ -90,12 +96,15 @@ def main():
             active_app_title = get_active_app_title()
             if active_app_title:
                 start_time=datetime.datetime.now()
-                while(active_app_title==get_active_app_title() ):
+                while(active_app_title==get_active_app_title()):
                     continue
 
                 end_time=datetime.datetime.now()
-                create_event(service,start_time,end_time,active_app_title)
-            
+                if(abs(end_time.minute-start_time.minute)>0.5):
+                    create_event(service,start_time,end_time,active_app_title)
+                
+                    
+                    
             else:
                 print("No active application.")
                 while(not active_app_title): active_app_title=get_active_app_title() 
