@@ -2,16 +2,30 @@ import datetime
 import pickle
 import os.path
 import time
-import pytz
 import pygetwindow as gw
+import tzlocal 
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 
+MINIMUM_DURATION = datetime.timedelta(minutes=1) 
+
+
+
+
 def convert_to_RFC_datetime(dt):
     return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+
+def get_timezone():
+    local_tz = tzlocal.get_localzone()
+    local_tzname = local_tz.tzname(datetime.datetime.now(local_tz))
+    return local_tzname
+
+
 
 def connect():
     creds = None
@@ -34,8 +48,8 @@ def create_event(service, start_time, end_time, summary):
     event = {
         'summary': summary,
         'description': "",
-        'start': {'dateTime': convert_to_RFC_datetime(start_time), "timezone": "GMT"},
-        'end': {'dateTime': convert_to_RFC_datetime(end_time), "timezone": "GMT"},
+        'start': {'dateTime': convert_to_RFC_datetime(start_time), "timezone":get_timezone()},
+        'end': {'dateTime': convert_to_RFC_datetime(end_time), "timezone": get_timezone()},
     }
     event_result = service.events().insert(calendarId='primary', body=event).execute()
     print(f'Event created: {event_result.get("htmlLink")}')
@@ -47,9 +61,16 @@ def get_active_app_title():
     except gw.PyGetWindowException:
         return None
 
+def get_timezone():
+    local_tz = tzlocal.get_localzone()
+    local_tzname = local_tz.tzname(datetime.datetime.now(local_tz))
+    return local_tzname
+
 def main():
     service = connect()
-    print("Tracking active application... (Press Ctrl+C to stop)")
+    local_tz = tzlocal.get_localzone()  
+
+    print(f"Tracking active application... Press CTRL+C to Stop")
     
     active_app_title = None
     start_time = None
@@ -59,24 +80,27 @@ def main():
             current_active_app_title = get_active_app_title()
             
             if current_active_app_title != active_app_title:
-                if active_app_title:
-                    end_time = datetime.datetime.now(pytz.timezone('Africa/Tunis'))
-                    create_event(service, start_time, end_time, active_app_title)
-                    print(f"Event created for {active_app_title}")
+                if active_app_title and start_time:
+                    end_time = datetime.datetime.now(local_tz)
+                    duration = end_time - start_time
+                    if duration >= MINIMUM_DURATION:
+                        create_event(service, start_time, end_time, active_app_title)
+                        print(f"Event created for {active_app_title} - Duration: {duration}")
                 
                 active_app_title = current_active_app_title
-                start_time = datetime.datetime.now(pytz.timezone('Africa/Tunis'))
+                start_time = datetime.datetime.now(local_tz)
             
             time.sleep(1)  
             
     except KeyboardInterrupt:
-        if active_app_title:
-            end_time = datetime.datetime.now(pytz.timezone('Africa/Tunis'))
-            create_event(service, start_time, end_time, active_app_title)
-            print(f"Event created for {active_app_title}")
+        if active_app_title and start_time:
+            end_time = datetime.datetime.now(local_tz)
+            duration = end_time - start_time
+            if duration >= MINIMUM_DURATION:
+                create_event(service, start_time, end_time, active_app_title)
+                print(f"Event created for {active_app_title} - Duration: {duration}")
         
         print("Tracking stopped.")
 
 if __name__ == "__main__":
     main()
-
