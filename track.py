@@ -10,17 +10,10 @@ from google.auth.transport.requests import Request
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 
-def create_event(service, start_time, end_time, summary, description):
-    event = {
-        'summary': summary,
-        'description': description,
-        'start': {'dateTime': start_time},
-        'end': {'dateTime': end_time},
-    }
-    event = service.events().insert(calendarId='primary', body=event).execute()
-    print(f'Event created: {event.get("htmlLink")}')
+def convert_to_RFC_datetime(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-def main():
+def connect():
     creds = None
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
@@ -30,42 +23,60 @@ def main():
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
+                'client_secret_921474185101-mit5b1k7sn4fej7n45k7bklbe8aqchh6.apps.googleusercontent.com.json', SCOPES)
             creds = flow.run_local_server(port=0)
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
-
     service = build('calendar', 'v3', credentials=creds)
+    return service
 
-    print("Tracking active application... (Press Ctrl+C to stop)")
+def create_event(service, start_time, end_time, summary):
+    event = {
+        'summary': summary,
+        'description': "",
+        'start': {'dateTime': convert_to_RFC_datetime(start_time), "timezone": "GMT"},
+        'end': {'dateTime': convert_to_RFC_datetime(end_time), "timezone": "GMT"},
+    }
+    event_result = service.events().insert(calendarId='primary', body=event).execute()
+    print(f'Event created: {event_result.get("htmlLink")}')
+
+def get_active_app_title():
     try:
-        
-        start_time = None
+        active_app = gw.getActiveWindow()
+        return active_app.title if active_app else None
+    except gw.PyGetWindowException:
+        return None
+
+def main():
+    service = connect()
+    print("Tracking active application... (Press Ctrl+C to stop)")
+    
+    active_app_title = None
+    start_time = None
+    
+    try:
         while True:
-            desired_timezone = pytz.timezone('Africa/Tunis')
-            active_app_title = gw.getActiveWindow().title
-            if active_app_title:
-                if start_time is None:
-                    start_time = datetime.datetime.now(desired_timezone)
-                elif gw.getActiveWindow().title != active_app_title:
-                    end_time = datetime.datetime.now(desired_timezone)
-                    duration = end_time - start_time
-
-                    summary = active_app_title
-                    description = f"Time spent: {duration}"
-                    event_start = start_time.strftime("%Y-%m-%dT%H:%M:%S%z")
-                    event_end = end_time.strftime("%Y-%m-%dT%H:%M:%S%z")
-                    
-                    create_event(service, event_start, event_end, summary, description)
-
-                    print(f"Event created for {active_app_title} - Duration: {duration}")
-                    start_time = None
-            else:
-                start_time = None
-
-            time.sleep(5) 
+            current_active_app_title = get_active_app_title()
+            
+            if current_active_app_title != active_app_title:
+                if active_app_title:
+                    end_time = datetime.datetime.now(pytz.timezone('Africa/Tunis'))
+                    create_event(service, start_time, end_time, active_app_title)
+                    print(f"Event created for {active_app_title}")
+                
+                active_app_title = current_active_app_title
+                start_time = datetime.datetime.now(pytz.timezone('Africa/Tunis'))
+            
+            time.sleep(1)  
+            
     except KeyboardInterrupt:
+        if active_app_title:
+            end_time = datetime.datetime.now(pytz.timezone('Africa/Tunis'))
+            create_event(service, start_time, end_time, active_app_title)
+            print(f"Event created for {active_app_title}")
+        
         print("Tracking stopped.")
 
 if __name__ == "__main__":
     main()
+
