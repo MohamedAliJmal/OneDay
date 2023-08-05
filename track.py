@@ -53,8 +53,8 @@ def main():
 
                     summary = active_app_title
                     description = f"Time spent: {duration}"
-                    event_start = start_time.strftime("%Y-%m-%d %H:%M:%S %Z")
-                    event_end = end_time.strftime("%Y-%m-%d %H:%M:%S %Z")
+                    event_start = start_time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                    event_end = end_time.strftime("%Y-%m-%dT%H:%M:%S%z")
                     
                     create_event(service, event_start, event_end, summary, description)
 
